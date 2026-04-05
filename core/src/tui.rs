@@ -208,7 +208,7 @@ pub fn print_snapshot(snapshot: &crate::SessionSnapshot) {
         );
         let start = snapshot.conversation.len().saturating_sub(10);
         for turn in &snapshot.conversation[start..] {
-            let (prefix, color) = match turn.role.as_str() {
+            let (prefix, _color) = match turn.role.as_str() {
                 "user" => ("👤 YOU ", turn.content.normal().to_string()),
                 "assistant" => ("🤖 AI  ", turn.content.cyan().to_string()),
                 "assistant_tool" => ("🔧 TOOL", turn.content.dimmed().to_string()),

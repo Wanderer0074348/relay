@@ -1,6 +1,8 @@
 //! Handoff package builder — compresses session state into a prompt
 //! that any agent can pick up and continue from.
 
+pub mod templates;
+
 use crate::SessionSnapshot;
 use anyhow::Result;
 

@@ -4,9 +4,25 @@
 
 [![Rust](https://img.shields.io/badge/Rust-1.70+-orange.svg)](https://www.rust-lang.org/)
 [![npm](https://img.shields.io/npm/v/@masyv/relay)](https://www.npmjs.com/package/@masyv/relay)
+[![GitHub Release](https://img.shields.io/github/v/release/Manavarya09/relay)](https://github.com/Manavarya09/relay/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ![Relay — Claude to Codex handoff](relay-hero.png)
+
+## Features
+
+- **Full conversation capture** — Reads Claude's actual `.jsonl` transcript, not just git
+- **8 agent adapters** — Codex, Claude, Aider, Gemini, Copilot, OpenCode, Ollama, OpenAI
+- **Interactive TUI** — Spinners, progress steps, fuzzy agent picker, color-coded output
+- **`relay resume`** — When Claude comes back, see what the fallback agent did
+- **`relay history`** — Browse all past handoffs with timestamps
+- **`relay diff`** — Show exactly what changed during the handoff
+- **Clipboard mode** — `--clipboard` copies handoff for pasting into any tool
+- **Handoff templates** — `--template minimal|full|raw` for different formats
+- **Rate limit auto-detection** — PostToolUse hook triggers handoff automatically
+- **Context control** — `--turns 10 --include git,todos` to customize
+- **Zero network capture** — Pure local file parsing, < 100ms
+- **4.6 MB binary** — Rust, no runtime, no GC
 
 ## The Problem
 
@@ -128,6 +144,21 @@ relay handoff
 
 # With deadline urgency
 relay handoff --to codex --deadline "7:00 PM"
+
+# Copy to clipboard instead
+relay handoff --clipboard
+
+# Minimal handoff (just task + error + git)
+relay handoff --template minimal --to codex
+
+# When Claude comes back — see what happened
+relay resume
+
+# List all past handoffs
+relay history
+
+# What changed since handoff?
+relay diff
 ```
 
 ## Context Control

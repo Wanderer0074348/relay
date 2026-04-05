@@ -50,6 +50,14 @@ enum Commands {
         /// What to include: all, conversation, git, todos (comma-separated)
         #[arg(long, default_value = "all")]
         include: String,
+
+        /// Copy handoff to clipboard instead of launching agent
+        #[arg(long)]
+        clipboard: bool,
+
+        /// Handoff template: full (default), minimal, raw
+        #[arg(long, default_value = "full")]
+        template: String,
     },
 
     /// Show current session snapshot
@@ -57,6 +65,19 @@ enum Commands {
 
     /// List configured agents and availability
     Agents,
+
+    /// Resume after rate limit resets — show what happened during handoff
+    Resume,
+
+    /// List past handoffs
+    History {
+        /// Number of entries to show
+        #[arg(long, default_value = "10")]
+        limit: usize,
+    },
+
+    /// Show what changed since the last handoff
+    Diff,
 
     /// Generate default config at ~/.relay/config.toml
     Init,
@@ -92,7 +113,7 @@ fn main() -> Result<()> {
         // ═══════════════════════════════════════════════════════════════
         // HANDOFF
         // ═══════════════════════════════════════════════════════════════
-        Commands::Handoff { to, deadline, dry_run, turns, include } => {
+        Commands::Handoff { to, deadline, dry_run, turns, include, clipboard, template } => {
             if !cli.json {
                 tui::print_banner();
             }
@@ -142,9 +163,18 @@ fn main() -> Result<()> {
                 "auto".into()
             };
 
-            let handoff_text = handoff::build_handoff(
-                &snapshot, &target_name, config.general.max_context_tokens,
-            )?;
+            // Build handoff using selected template
+            let handoff_text = match handoff::templates::Template::from_str(&template) {
+                handoff::templates::Template::Minimal => {
+                    handoff::templates::build_minimal(&snapshot, &target_name)
+                }
+                handoff::templates::Template::Raw => {
+                    handoff::templates::build_raw(&snapshot)
+                }
+                handoff::templates::Template::Full => {
+                    handoff::build_handoff(&snapshot, &target_name, config.general.max_context_tokens)?
+                }
+            };
             let handoff_path = handoff::save_handoff(&handoff_text, &project_dir)?;
 
             if let Some(sp) = sp { sp.finish_with_message("Handoff built"); }
@@ -157,6 +187,29 @@ fn main() -> Result<()> {
                     "handoff_file": handoff_path.to_string_lossy(),
                     "target_agent": target_name,
                 }))?);
+                return Ok(());
+            }
+            // Clipboard mode
+            if clipboard {
+                #[cfg(target_os = "macos")]
+                {
+                    use std::process::{Command, Stdio};
+                    let mut child = Command::new("pbcopy")
+                        .stdin(Stdio::piped())
+                        .spawn()?;
+                    if let Some(mut stdin) = child.stdin.take() {
+                        use std::io::Write;
+                        stdin.write_all(handoff_text.as_bytes())?;
+                    }
+                    child.wait()?;
+                    eprintln!("  📋 Handoff copied to clipboard!");
+                    eprintln!("  📄 Also saved: {}", handoff_path.display());
+                }
+                #[cfg(not(target_os = "macos"))]
+                {
+                    eprintln!("  Clipboard not supported on this platform.");
+                    eprintln!("  📄 Saved to: {}", handoff_path.display());
+                }
                 return Ok(());
             }
             if dry_run {
@@ -216,6 +269,108 @@ fn main() -> Result<()> {
             } else {
                 tui::print_agents(&config.general.priority, &statuses);
             }
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // RESUME
+        // ═══════════════════════════════════════════════════════════════
+        Commands::Resume => {
+            let report = relay::resume::build_resume(&project_dir)?;
+
+            if cli.json {
+                println!("{}", serde_json::to_string_pretty(&report)?);
+            } else {
+                tui::print_section("🔄", "Resume — What Happened During Handoff");
+                eprintln!("  Handoff at: {}", report.handoff_time);
+                eprintln!("  Task: {}", report.original_task);
+                eprintln!();
+
+                if !report.new_commits.is_empty() {
+                    tui::print_section("📝", &format!("New Commits ({})", report.new_commits.len()));
+                    for c in &report.new_commits {
+                        eprintln!("  {c}");
+                    }
+                }
+
+                if !report.changes_since.is_empty() {
+                    tui::print_section("📄", &format!("Changed Files ({})", report.changes_since.len()));
+                    for f in &report.changes_since {
+                        eprintln!("  {f}");
+                    }
+                }
+
+                if !report.diff_stat.is_empty() {
+                    tui::print_section("📊", "Diff Summary");
+                    for line in report.diff_stat.lines() {
+                        eprintln!("  {line}");
+                    }
+                }
+
+                eprintln!();
+                eprintln!("  📋 Resume prompt ready. Use --json to get the full prompt.");
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // HISTORY
+        // ═══════════════════════════════════════════════════════════════
+        Commands::History { limit } => {
+            let entries = relay::history::list_handoffs(&project_dir, limit)?;
+
+            if cli.json {
+                println!("{}", serde_json::to_string_pretty(&entries)?);
+                return Ok(());
+            }
+
+            if entries.is_empty() {
+                eprintln!("  No handoffs recorded yet.");
+                return Ok(());
+            }
+
+            tui::print_section("📜", &format!("Handoff History ({} entries)", entries.len()));
+            eprintln!();
+            for e in &entries {
+                eprintln!(
+                    "  {}  → {:<10}  {}",
+                    e.timestamp, e.agent, e.task
+                );
+            }
+            eprintln!();
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // DIFF
+        // ═══════════════════════════════════════════════════════════════
+        Commands::Diff => {
+            let report = relay::diff::diff_since_handoff(&project_dir)?;
+
+            if cli.json {
+                println!("{}", serde_json::to_string_pretty(&report)?);
+                return Ok(());
+            }
+
+            tui::print_section("📊", "Changes Since Last Handoff");
+            eprintln!("  Handoff at: {}", report.handoff_time);
+            eprintln!(
+                "  {} added, {} modified, {} deleted",
+                report.files_added, report.files_modified, report.files_deleted
+            );
+
+            if !report.new_commits.is_empty() {
+                eprintln!();
+                eprintln!("  Commits:");
+                for c in &report.new_commits {
+                    eprintln!("    {c}");
+                }
+            }
+
+            if !report.diff_stat.is_empty() {
+                eprintln!();
+                for line in report.diff_stat.lines() {
+                    eprintln!("  {line}");
+                }
+            }
+            eprintln!();
         }
 
         // ═══════════════════════════════════════════════════════════════

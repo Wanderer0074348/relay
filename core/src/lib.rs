@@ -1,7 +1,10 @@
 pub mod agents;
 pub mod capture;
 pub mod detect;
+pub mod diff;
 pub mod handoff;
+pub mod history;
+pub mod resume;
 pub mod tui;
 
 use serde::{Deserialize, Serialize};
