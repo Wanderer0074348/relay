@@ -3,6 +3,10 @@
 //! tool calls with results, errors, and decisions.
 
 use std::path::Path;
+use std::sync::atomic::AtomicUsize;
+
+/// Controls how many conversation turns to keep. Set before calling read_latest_session.
+pub static MAX_CONVERSATION_TURNS: AtomicUsize = AtomicUsize::new(25);
 
 /// Extracted session info from Claude's transcript.
 pub struct SessionInfo {
@@ -143,7 +147,7 @@ fn parse_session_transcript(path: &std::path::Path) -> SessionInfo {
 
                                     conversation.push(ConversationTurn {
                                         role: "tool_result".into(),
-                                        content: truncate(&result_text, 600),
+                                        content: truncate(&result_text, 200),
                                     });
                                 }
                             }
@@ -168,7 +172,7 @@ fn parse_session_transcript(path: &std::path::Path) -> SessionInfo {
                         }
                         conversation.push(ConversationTurn {
                             role: "user".into(),
-                            content: truncate(&user_text, 400),
+                            content: truncate(&user_text, 300),
                         });
                     }
                 }
@@ -185,7 +189,7 @@ fn parse_session_transcript(path: &std::path::Path) -> SessionInfo {
                                 if !text.is_empty() {
                                     conversation.push(ConversationTurn {
                                         role: "assistant".into(),
-                                        content: truncate(text, 500),
+                                        content: truncate(text, 200),
                                     });
                                     // Extract decisions
                                     for line in text.lines() {
@@ -230,8 +234,8 @@ fn parse_session_transcript(path: &std::path::Path) -> SessionInfo {
     decisions.dedup();
     decisions.truncate(15);
 
-    // Keep last N conversation turns to fit context — prioritize recent
-    let max_turns = 80;
+    // Keep last N conversation turns — caller can override via max_conversation_turns
+    let max_turns = MAX_CONVERSATION_TURNS.load(std::sync::atomic::Ordering::Relaxed);
     if conversation.len() > max_turns {
         let skip = conversation.len() - max_turns;
         conversation = conversation.into_iter().skip(skip).collect();

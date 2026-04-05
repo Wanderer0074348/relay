@@ -135,11 +135,15 @@ pub fn build_handoff(
 
     let mut full = sections.join("\n\n");
 
-    // Truncate if too long (rough token estimate: chars / 3.5)
-    let estimated_tokens = full.len() as f64 / 3.5;
-    if estimated_tokens > max_tokens as f64 {
-        let max_chars = (max_tokens as f64 * 3.5) as usize;
-        full.truncate(max_chars);
+    // Hard cap at max_tokens (rough estimate: chars / 3.5)
+    let max_chars = (max_tokens as f64 * 3.5) as usize;
+    if full.len() > max_chars {
+        // Find a valid UTF-8 char boundary
+        let mut end = max_chars;
+        while end > 0 && !full.is_char_boundary(end) {
+            end -= 1;
+        }
+        full.truncate(end);
         full.push_str("\n\n[...truncated to fit context limit]");
     }
 

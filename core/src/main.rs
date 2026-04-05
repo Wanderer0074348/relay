@@ -44,6 +44,14 @@ enum Commands {
         /// Don't execute — just print the handoff package
         #[arg(long)]
         dry_run: bool,
+
+        /// How many conversation turns to include (default: 25)
+        #[arg(long, default_value = "25")]
+        turns: usize,
+
+        /// What to include: all, conversation, git, todos (comma-separated)
+        #[arg(long, default_value = "all")]
+        include: String,
     },
 
     /// Show current session snapshot (what would be handed off)
@@ -84,13 +92,32 @@ fn main() -> Result<()> {
     });
 
     match cli.command {
-        Commands::Handoff { to, deadline, dry_run } => {
+        Commands::Handoff { to, deadline, dry_run, turns, include } => {
             eprintln!("{}", "⚡ Relay — capturing session state...".yellow().bold());
 
-            let snapshot = capture::capture_snapshot(
+            // Set conversation turn limit before capture
+            relay::capture::session::MAX_CONVERSATION_TURNS
+                .store(turns, std::sync::atomic::Ordering::Relaxed);
+
+            let mut snapshot = capture::capture_snapshot(
                 &project_dir,
                 deadline.as_deref(),
             )?;
+
+            // Filter sections based on --include flag
+            let includes: Vec<&str> = include.split(',').map(|s| s.trim()).collect();
+            if !includes.contains(&"all") {
+                if !includes.contains(&"conversation") {
+                    snapshot.conversation.clear();
+                }
+                if !includes.contains(&"git") {
+                    snapshot.git_state = None;
+                    snapshot.recent_files.clear();
+                }
+                if !includes.contains(&"todos") {
+                    snapshot.todos.clear();
+                }
+            }
 
             let target = to.as_deref().unwrap_or("auto");
             let handoff_text = handoff::build_handoff(
