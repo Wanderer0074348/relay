@@ -2,9 +2,11 @@
 
 **When Claude Code hits its rate limit, another agent picks up exactly where you left off — with full conversation context.**
 
+[![CI](https://github.com/Manavarya09/relay/actions/workflows/ci.yml/badge.svg)](https://github.com/Manavarya09/relay/actions)
 [![Rust](https://img.shields.io/badge/Rust-1.70+-orange.svg)](https://www.rust-lang.org/)
 [![npm](https://img.shields.io/npm/v/@masyv/relay)](https://www.npmjs.com/package/@masyv/relay)
 [![GitHub Release](https://img.shields.io/github/v/release/Manavarya09/relay)](https://github.com/Manavarya09/relay/releases)
+[![Tests](https://img.shields.io/badge/tests-32_passing-brightgreen.svg)](https://github.com/Manavarya09/relay/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ![Relay — Claude to Codex handoff](relay-hero.png)
