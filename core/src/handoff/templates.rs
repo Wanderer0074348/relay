@@ -10,7 +10,7 @@ pub enum Template {
 }
 
 impl Template {
-    pub fn from_str(s: &str) -> Self {
+    pub fn parse(s: &str) -> Self {
         match s.to_lowercase().as_str() {
             "minimal" | "min" => Self::Minimal,
             "raw" | "conversation" => Self::Raw,

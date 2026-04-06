@@ -6,6 +6,7 @@ use crate::{AgentStatus, HandoffResult};
 use anyhow::Result;
 use std::process::Command;
 
+#[derive(Default)]
 pub struct OpenCodeAgent;
 
 impl OpenCodeAgent {

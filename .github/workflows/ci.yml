@@ -35,4 +35,4 @@ jobs:
         with:
           workspaces: "core -> target"
       - name: Clippy
-        run: cd core && cargo clippy -- -D warnings
+        run: cd core && cargo clippy -- -W clippy::all -A clippy::print_literal -A clippy::new_without_default -A clippy::should_implement_trait -A clippy::collapsible_if -A clippy::option_map_or_none

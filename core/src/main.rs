@@ -164,7 +164,7 @@ fn main() -> Result<()> {
             };
 
             // Build handoff using selected template
-            let handoff_text = match handoff::templates::Template::from_str(&template) {
+            let handoff_text = match handoff::templates::Template::parse(&template) {
                 handoff::templates::Template::Minimal => {
                     handoff::templates::build_minimal(&snapshot, &target_name)
                 }
