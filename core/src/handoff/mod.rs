@@ -175,11 +175,17 @@ fn truncate_smart(s: &str, max: usize) -> String {
     if s.len() <= max {
         return s.to_string();
     }
-    // Try to cut at a line boundary
-    let cut = &s[..max];
+    // Find a valid UTF-8 char boundary at or before `max` to avoid panicking
+    // on multi-byte characters (e.g., non-ASCII file paths, emoji, CJK text).
+    let mut end = max;
+    while end > 0 && !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    // Try to cut at a line boundary for cleaner output
+    let cut = &s[..end];
     if let Some(last_nl) = cut.rfind('\n') {
         format!("{}\n[...truncated]", &s[..last_nl])
     } else {
-        format!("{}...", &s[..max])
+        format!("{}...", cut)
     }
 }
