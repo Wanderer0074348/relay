@@ -92,6 +92,21 @@ enum Commands {
     /// Validate config and test agent connectivity
     Validate,
 
+    /// Remove old handoff files from .relay/
+    Clean {
+        /// Number of recent handoffs to keep (default: 5)
+        #[arg(long, default_value = "5")]
+        keep: usize,
+
+        /// Remove handoffs older than duration (e.g., "7d", "30d", "24h")
+        #[arg(long)]
+        older_than: Option<String>,
+
+        /// Show what would be removed without actually deleting
+        #[arg(long)]
+        dry_run: bool,
+    },
+
     /// PostToolUse hook (auto-detect rate limits)
     Hook {
         #[arg(long, default_value = "unknown")]
@@ -526,6 +541,33 @@ fn main() -> Result<()> {
                 eprintln!("  {} Some agents need attention. Run 'relay init' to configure.", "💡".to_string());
             }
             eprintln!();
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // CLEAN
+        // ═══════════════════════════════════════════════════════════════
+        Commands::Clean { keep, older_than, dry_run } => {
+            let older_secs = older_than.as_deref().and_then(relay::clean::parse_duration);
+            let result = relay::clean::clean_handoffs(&project_dir, keep, older_secs, dry_run)?;
+
+            if cli.json {
+                println!("{}", serde_json::to_string_pretty(&result)?);
+                return Ok(());
+            }
+
+            if result.removed.is_empty() {
+                eprintln!("  No handoff files to clean.");
+            } else {
+                let action = if dry_run { "Would remove" } else { "Removed" };
+                eprintln!("  {} {} handoff file(s), freed ~{} KB",
+                    action, result.removed.len(), result.bytes_freed / 1024);
+                for f in &result.removed {
+                    eprintln!("    - {f}");
+                }
+            }
+            if !result.kept.is_empty() {
+                eprintln!("  Kept {} file(s)", result.kept.len());
+            }
         }
 
         // ═══════════════════════════════════════════════════════════════

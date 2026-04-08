@@ -1,5 +1,6 @@
 pub mod agents;
 pub mod capture;
+pub mod clean;
 pub mod detect;
 pub mod diff;
 pub mod handoff;
