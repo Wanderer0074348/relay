@@ -65,6 +65,21 @@ enum Commands {
         /// Handoff template: full (default), minimal, raw
         #[arg(long, default_value = "full")]
         template: String,
+
+        /// Target a specific session by ID (or prefix). Use 'relay sessions' to list.
+        #[arg(long)]
+        session: Option<String>,
+    },
+
+    /// List available Claude Code sessions
+    Sessions {
+        /// Maximum number of sessions to show
+        #[arg(long, default_value = "20")]
+        limit: usize,
+
+        /// Filter by project path substring
+        #[arg(long)]
+        filter: Option<String>,
     },
 
     /// Show current session snapshot
@@ -197,10 +212,30 @@ fn main() -> Result<()> {
         // ═══════════════════════════════════════════════════════════════
         // HANDOFF
         // ═══════════════════════════════════════════════════════════════
-        Commands::Handoff { to, deadline, dry_run, force, turns, include, clipboard, template } => {
+        Commands::Handoff { to, deadline, dry_run, force, turns, include, clipboard, template, session } => {
             if !cli.json {
                 tui::print_banner();
             }
+
+            // Resolve project directory from --session if provided
+            let project_dir = if let Some(ref sid) = session {
+                match relay::sessions::find_session(sid)? {
+                    Some(entry) => {
+                        if !cli.json {
+                            eprintln!("  {} Targeting session {} ({})",
+                                "📂".to_string(), &entry.session_id[..8], entry.project_path.dimmed());
+                            eprintln!();
+                        }
+                        PathBuf::from(&entry.project_path)
+                    }
+                    None => {
+                        eprintln!("  No session matching '{}'. Run 'relay sessions' to list.", sid);
+                        return Ok(());
+                    }
+                }
+            } else {
+                project_dir
+            };
 
             let handoff_start = Instant::now();
 
@@ -430,6 +465,28 @@ fn main() -> Result<()> {
                 eprintln!();
             } else {
                 tui::print_handoff_fail(&result.message, &handoff_path.to_string_lossy());
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // SESSIONS
+        // ═══════════════════════════════════════════════════════════════
+        Commands::Sessions { limit, filter: filter_project } => {
+            let sp = if !cli.json { Some(tui::spinner("Scanning sessions...")) } else { None };
+            let mut sessions = relay::sessions::list_sessions()?;
+            if let Some(sp) = sp { sp.finish_and_clear(); }
+
+            // Apply project filter
+            if let Some(ref filter) = filter_project {
+                sessions.retain(|s| s.project_path.contains(filter));
+            }
+
+            sessions.truncate(limit);
+
+            if cli.json {
+                println!("{}", serde_json::to_string_pretty(&sessions)?);
+            } else {
+                tui::print_sessions(&sessions);
             }
         }
 

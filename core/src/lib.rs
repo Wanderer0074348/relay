@@ -13,6 +13,7 @@ pub mod resume;
 pub mod retry;
 pub mod scoring;
 pub mod secrets;
+pub mod sessions;
 pub mod tui;
 pub mod validate;
 pub mod watch;
