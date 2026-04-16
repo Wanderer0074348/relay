@@ -1,91 +1,97 @@
 import * as vscode from 'vscode';
 import { RelayClient } from '../relayClient';
+import { getInstalledAgents, launchAgent } from '../agents/registry';
 
-export function registerCommands(
-	context: vscode.ExtensionContext,
-	relayClient: RelayClient
-): void {
-	// Helper to open terminal with command
-	function openTerminalWithCommand(command: string, name: string = 'Relay'): void {
-		const terminal = vscode.window.createTerminal(name);
-		terminal.sendText(command);
-		terminal.show();
-	}
+interface AgentQuickPick extends vscode.QuickPickItem {
+	extensionId: string;
+}
 
-	// Handoff
+function openTerminal(command: string, name: string): void {
+	const terminal = vscode.window.createTerminal(name);
+	terminal.sendText(command);
+	terminal.show();
+}
+
+function projectDir(): string | undefined {
+	return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+}
+
+export function registerCommands(context: vscode.ExtensionContext, relayClient: RelayClient): void {
 	context.subscriptions.push(
 		vscode.commands.registerCommand('relay.handoff', async () => {
-			try {
-				const projectDir = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+			const agents = getInstalledAgents();
 
-				const agents = ['claude', 'codex', 'gemini', 'aider', 'copilot', 'opencode', 'ollama', 'openai'];
-
-				const selected = await vscode.window.showQuickPick(agents, {
-					placeHolder: 'Select agent to handoff to',
-					title: 'Relay Handoff',
-				});
-
-				if (!selected) {
-					return;
-				}
-
-				const command = relayClient.buildHandoffCommand(selected, projectDir);
-				openTerminalWithCommand(command, `Relay → ${selected}`);
-			} catch (error) {
-				vscode.window.showErrorMessage(`Error: ${error}`);
+			if (agents.length < 1) {
+				vscode.window.showWarningMessage('No agent extensions found. Install Copilot, Gemini, or similar.');
+				return;
 			}
+
+			const toItems = (list: ReturnType<typeof getInstalledAgents>): AgentQuickPick[] =>
+				list.map(a => ({
+					label: a.name,
+					extensionId: a.id,
+					description: a.autoTrigger ? 'Auto' : 'Clipboard',
+				}));
+
+			const from = await vscode.window.showQuickPick(toItems(agents), {
+				placeHolder: 'Handing off from...',
+				title: 'Relay Handoff (1/2)',
+			});
+			if (!from) { return; }
+
+			const to = await vscode.window.showQuickPick(
+				toItems(agents.filter(a => a.id !== from.extensionId)),
+				{
+					placeHolder: 'Hand off to...',
+					title: `Relay Handoff: ${from.label} → (2/2)`,
+				}
+			);
+			if (!to) { return; }
+
+			await vscode.window.withProgress(
+				{ location: vscode.ProgressLocation.Notification, title: `${from.label} → ${to.label}`, cancellable: false },
+				async (progress) => {
+					try {
+						progress.report({ message: 'Capturing session...' });
+						const result = await relayClient.getHandoffText(to.extensionId, projectDir());
+
+						const handoffWithContext = `[Handoff from ${from.label}]\n\n${result.handoff_text}`;
+
+						progress.report({ message: `Launching ${to.label}...` });
+						await launchAgent(to.extensionId, handoffWithContext);
+
+						vscode.window.showInformationMessage(
+							`Session handed off from ${from.label} to ${to.label}. Saved: ${result.handoff_file}`
+						);
+					} catch (error) {
+						vscode.window.showErrorMessage(`Handoff failed: ${error}`);
+					}
+				}
+			);
 		})
 	);
 
-	// Copy Handoff
 	context.subscriptions.push(
 		vscode.commands.registerCommand('relay.copyHandoff', async () => {
-			try {
-				const projectDir = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-				const command = relayClient.buildCopyHandoffCommand(projectDir);
-				openTerminalWithCommand(command, 'Relay: Copy Handoff');
-			} catch (error) {
-				vscode.window.showErrorMessage(`Error: ${error}`);
-			}
+			openTerminal(relayClient.buildCopyHandoffCommand(projectDir()), 'Relay: Copy Handoff');
 		})
 	);
 
-	// Status
 	context.subscriptions.push(
 		vscode.commands.registerCommand('relay.showStatus', async () => {
-			try {
-				const projectDir = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-				const command = relayClient.buildStatusCommand(projectDir);
-				openTerminalWithCommand(command, 'Relay: Status');
-			} catch (error) {
-				vscode.window.showErrorMessage(`Error: ${error}`);
-			}
+			openTerminal(relayClient.buildStatusCommand(projectDir()), 'Relay: Status');
 		})
 	);
 
-	// History
 	context.subscriptions.push(
 		vscode.commands.registerCommand('relay.history', async () => {
-			try {
-				const projectDir = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-				const command = relayClient.buildHistoryCommand(10, projectDir);
-				openTerminalWithCommand(command, 'Relay: History');
-			} catch (error) {
-				vscode.window.showErrorMessage(`Error: ${error}`);
-			}
+			openTerminal(relayClient.buildHistoryCommand(10, projectDir()), 'Relay: History');
 		})
 	);
 
-	// View Diff
 	context.subscriptions.push(
 		vscode.commands.registerCommand('relay.viewDiff', async () => {
-			try {
-				const projectDir = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-				const command = relayClient.buildDiffCommand(projectDir);
-				openTerminalWithCommand(command, 'Relay: Diff');
-			} catch (error) {
-				vscode.window.showErrorMessage(`Error: ${error}`);
-			}
+			openTerminal(relayClient.buildDiffCommand(projectDir()), 'Relay: Diff');
 		})
 	);
 }

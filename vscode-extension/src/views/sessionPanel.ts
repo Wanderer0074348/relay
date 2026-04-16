@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import { RelayClient, SessionSnapshot, AgentStatus } from '../relayClient';
+import { RelayClient, SessionSnapshot } from '../relayClient';
+import { getInstalledAgents } from '../agents/registry';
 
 export class SessionPanelProvider implements vscode.TreeDataProvider<SessionItem> {
 	private _onDidChangeTreeData: vscode.EventEmitter<SessionItem | undefined | null | void> =
@@ -8,7 +9,7 @@ export class SessionPanelProvider implements vscode.TreeDataProvider<SessionItem
 		this._onDidChangeTreeData.event;
 
 	private sessionSnapshot: SessionSnapshot | null = null;
-	private agents: AgentStatus[] = [];
+	private agents: { name: string; available: boolean; reason: string }[] = [];
 
 	constructor(
 		private extensionUri: vscode.Uri,
@@ -118,42 +119,11 @@ export class SessionPanelProvider implements vscode.TreeDataProvider<SessionItem
 			);
 		}
 
-		// Agents - Show VS Code extensions instead
 		if (element.id === 'agents') {
-			const agentExtensions = [
-				{ id: 'github.copilot-chat', name: 'GitHub Copilot Chat' },
-				{ id: 'google.geminicodeassist', name: 'Google Gemini Code Assist' },
-				{ id: 'Codeium.codeium', name: 'Codeium' },
-				{ id: 'aws.amazonq', name: 'Amazon Q' },
-				{ id: 'TabNine.tabnine', name: 'Tabnine' },
-				{ id: 'continue.continue', name: 'Continue' },
-				{ id: 'supermaven.supermaven', name: 'Supermaven' },
-			];
-
-			const installed = agentExtensions.filter(agent => {
-				const ext = vscode.extensions.getExtension(agent.id);
-				return ext !== undefined;
-			});
-
+			const installed = getInstalledAgents();
 			return installed.length > 0
-				? installed.map(
-					(agent) =>
-						new SessionItem(
-							agent.name,
-							'✓ Ready',
-							vscode.TreeItemCollapsibleState.None,
-							'agent',
-							'relay.handoff'
-						)
-				)
-				: [
-					new SessionItem(
-						'No agent extensions found',
-						'Install Copilot, Gemini, or similar',
-						vscode.TreeItemCollapsibleState.None,
-						'agent'
-					),
-				];
+				? installed.map(a => new SessionItem(a.name, a.autoTrigger ? '✓ Auto' : '⎘ Clipboard', vscode.TreeItemCollapsibleState.None, 'agent', 'relay.handoff'))
+				: [new SessionItem('No agent extensions found', 'Install Copilot, Gemini, or similar', vscode.TreeItemCollapsibleState.None, 'agent')];
 		}
 
 		return [];

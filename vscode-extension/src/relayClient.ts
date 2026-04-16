@@ -115,6 +115,15 @@ export class RelayClient {
 		return output;
 	}
 
+	async getHandoffText(agent: string, projectDir?: string, template: string = 'full'): Promise<{ handoff_text: string; handoff_file: string }> {
+		const args = ['handoff', '--to', agent, '--template', template, '--json'];
+		if (projectDir) {
+			args.push('--project', this.normalizePath(projectDir));
+		}
+		const output = await this.exec(args);
+		return JSON.parse(output);
+	}
+
 	buildHandoffCommand(agent: string, projectDir?: string, template: string = 'full'): string {
 		const args = ['handoff', '--to', agent, '--template', template, '--clipboard'];
 		if (projectDir) {
